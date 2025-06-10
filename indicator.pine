@@ -414,15 +414,19 @@ if barstate.islast and ltfBD.size() > 0
     // ──────────────────────────────────────────────────────────────────────────
     //                           ***  NEW  TABLE  ***
     // ──────────────────────────────────────────────────────────────────────────
+    // ────────────────────────
+    // Calculate statistics for Net Strength and volume distribution
+    // ────────────────────────
+    totVol = vD.vt.sum()
+    buyVol = vD.vb.sum()
+    sellVol = totVol - buyVol
+    buyPct = totVol > 0 ? buyVol / totVol * 100 : 0
+    sellPct = totVol > 0 ? sellVol / totVol * 100 : 0
+    netStr = buyPct - sellPct  // positive → buyers stronger
+
     if vpST
         table change = table.new(tPOS, 2, 3, border_width = 3)
         tC = chart.fg_color
-        totVol = vD.vt.sum()
-        buyVol = vD.vb.sum()
-        sellVol = totVol - buyVol
-        buyPct = totVol > 0 ? buyVol / totVol * 100 : 0
-        sellPct = totVol > 0 ? sellVol / totVol * 100 : 0
-        netStr = buyPct - sellPct  // positive → buyers stronger
 
         // Buyers %
         table.cell(change, 0, 0, 'Buyers %', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
@@ -490,6 +494,24 @@ if nzV > vSMA * upTH and vwcb
 
 if nzV > vSMA * 4.669 and vwcb
     alarm('watch out volume spike detected, may be a sign of exhaustion')
+
+// -----------------------------------------------------------------------------
+// Buy/Sell signals
+// -----------------------------------------------------------------------------
+buySignal  = close > vaL or netStr > 10
+sellSignal = close < vaH or netStr < -10
+
+if barstate.isconfirmed
+    if buySignal or sellSignal
+        label.new(
+          bar_index,
+          buySignal ? low - syminfo.mintick * 5 : high + syminfo.mintick * 5,
+          text = buySignal ? 'B' : 'S',
+          style = buySignal ? label.style_label_up : label.style_label_down,
+          color = buySignal ? color.green : color.red,
+          textcolor = color.white,
+          size = size.small
+        )
 
 //-----------------------------------------------------------------------------{
 
