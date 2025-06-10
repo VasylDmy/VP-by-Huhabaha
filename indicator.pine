@@ -461,11 +461,64 @@ if barstate.islast and ltfBD.size() > 0
 
         f_drawLabelX(vpRT ? (vpSH ? int(pLN * vpWD + vpHO) : spSH ? vpHO : 0) + last_bar_index : last_bar_index, pLST, str.tostring(pLST, format.mintick), color.new(chart.fg_color, 89), vpRT ? not vpSH and not spSH ? label.style_label_left : label.style_label_up : label.style_label_left, chart.fg_color, rpS, 'Profile Low')
 
+    // distance calculations for target table
+    float closestSupply = na
+    float closestDemand = na
+    if sdSH
+        for i = 0 to vpNR - 1 by 1
+            if vD.vt.get(i) / vD.vt.max() < sdTH
+                cen = pLST + (i + 0.5) * pSTP
+                if cen > pLST + (VP.pcL + 0.5) * pSTP
+                    sup = pLST + (i + 1) * pSTP
+                    if sup >= b.c and (na(closestSupply) or sup < closestSupply)
+                        closestSupply := sup
+                else
+                    dem = pLST + i * pSTP
+                    if dem <= b.c and (na(closestDemand) or dem > closestDemand)
+                        closestDemand := dem
+
+    distVAH = not na(curVAH) ? math.abs(b.c - curVAH) : na
+    distVAL = not na(curVAL) ? math.abs(b.c - curVAL) : na
+    distPOC = not na(curPOC) ? math.abs(b.c - curPOC) : na
+    distSup = not na(closestSupply) ? math.abs(b.c - closestSupply) : na
+    distDem = not na(closestDemand) ? math.abs(b.c - closestDemand) : na
+
+    pctVAH = not na(distVAH) ? distVAH / b.c * 100 : na
+    pctVAL = not na(distVAL) ? distVAL / b.c * 100 : na
+    pctPOC = not na(distPOC) ? distPOC / b.c * 100 : na
+    pctSup = not na(distSup) ? distSup / b.c * 100 : na
+    pctDem = not na(distDem) ? distDem / b.c * 100 : na
+
+    float minDist = na
+    string targetName = ''
+    float targetPct = na
+
+    if not na(distPOC)
+        minDist := distPOC
+        targetName := 'POC'
+        targetPct := pctPOC
+    if not na(distVAH) and (na(minDist) or distVAH < minDist or (distVAH == minDist and targetName != 'POC'))
+        minDist := distVAH
+        targetName := 'VAH'
+        targetPct := pctVAH
+    if not na(distVAL) and (na(minDist) or distVAL < minDist or (distVAL == minDist and targetName not in ['POC', 'VAH']))
+        minDist := distVAL
+        targetName := 'VAL'
+        targetPct := pctVAL
+    if not na(distDem) and (na(minDist) or distDem < minDist or (distDem == minDist and targetName not in ['POC', 'VAH', 'VAL']))
+        minDist := distDem
+        targetName := 'Demand'
+        targetPct := pctDem
+    if not na(distSup) and (na(minDist) or distSup < minDist or (distSup == minDist and targetName not in ['POC', 'VAH', 'VAL', 'Demand']))
+        minDist := distSup
+        targetName := 'Supply'
+        targetPct := pctSup
+
     // ──────────────────────────────────────────────────────────────────────────
     //                           ***  NEW  TABLE  ***
     // ──────────────────────────────────────────────────────────────────────────
     if vpST
-        table change = table.new(tPOS, 2, 3, border_width = 3)
+        table change = table.new(tPOS, 2, 10, border_width = 3)
         tC = chart.fg_color
         totVol = vD.vt.sum()
         buyVol = vD.vb.sum()
@@ -485,6 +538,34 @@ if barstate.islast and ltfBD.size() > 0
         // Net Strength
         table.cell(change, 0, 2, 'Net Strength', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
         table.cell(change, 1, 2, str.tostring(netStr, '#.##'), text_color = netStr >= 0 ? spUC : spDC, bgcolor = color.new(netStr >= 0 ? spUC : spDC, 80), text_halign = text.align_right, text_size = ppLS, tooltip = netStr >= 0 ? 'Buyers dominate' : 'Sellers dominate')
+
+        // Target
+        table.cell(change, 0, 3, 'Target', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
+        table.cell(change, 1, 3, targetName, text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_right, text_size = ppLS)
+
+        // Target %
+        table.cell(change, 0, 4, 'Target %', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
+        table.cell(change, 1, 4, not na(targetPct) ? str.tostring(targetPct, '#.##') + '%' : 'n/a', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_right, text_size = ppLS)
+
+        // POC %
+        table.cell(change, 0, 5, 'POC %', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
+        table.cell(change, 1, 5, not na(pctPOC) ? str.tostring(pctPOC, '#.##') + '%' : 'n/a', text_color = color.new(tC, 40), bgcolor = color.new(tC, 80), text_halign = text.align_right, text_size = ppLS)
+
+        // VAH %
+        table.cell(change, 0, 6, 'VAH %', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
+        table.cell(change, 1, 6, not na(pctVAH) ? str.tostring(pctVAH, '#.##') + '%' : 'n/a', text_color = color.new(tC, 40), bgcolor = color.new(tC, 80), text_halign = text.align_right, text_size = ppLS)
+
+        // VAL %
+        table.cell(change, 0, 7, 'VAL %', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
+        table.cell(change, 1, 7, not na(pctVAL) ? str.tostring(pctVAL, '#.##') + '%' : 'n/a', text_color = color.new(tC, 40), bgcolor = color.new(tC, 80), text_halign = text.align_right, text_size = ppLS)
+
+        // Demand %
+        table.cell(change, 0, 8, 'Demand %', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
+        table.cell(change, 1, 8, not na(pctDem) ? str.tostring(pctDem, '#.##') + '%' : 'n/a', text_color = color.new(tC, 40), bgcolor = color.new(tC, 80), text_halign = text.align_right, text_size = ppLS)
+
+        // Supply %
+        table.cell(change, 0, 9, 'Supply %', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
+        table.cell(change, 1, 9, not na(pctSup) ? str.tostring(pctSup, '#.##') + '%' : 'n/a', text_color = color.new(tC, 40), bgcolor = color.new(tC, 80), text_halign = text.align_right, text_size = ppLS)
         // ──────────────────────────────────────────────────────────────────────────
 
     for i = 0 to vpNR - 1 by 1
