@@ -1,5 +1,5 @@
 //@version=6
-indicator('Volume Profile and Indicator', 'VP ʙʏ Huhabaha', overlay = true, max_boxes_count = 500, max_lines_count = 500, max_bars_back = 5000)
+indicator('Volume Profile by Huhabaha', overlay = true, max_boxes_count = 500, max_lines_count = 500, max_bars_back = 5000)
 
 //------------------------------------------------------------------------------
 // Inputs
@@ -9,7 +9,10 @@ disp = display.all - display.status_line
 
 vpGR = 'Volume & Sentiment Profile'
 
-vpTP = 'displays total trading activity (both buying and selling trading activity) over a specified time period at specific price levels\n\n' + 'row lengths, indicates the amount of the traded activity at specific price levels\n\n' + ' - high traded zones - usually represents consolidation zones (value areas)\n' + ' - low traded zones - usually represents supply & demand or liquidity zones'
+vpTP = 'displays total trading activity (both buying and selling trading activity) over a specified time period at specific price levels\n\n' +
+       'row lengths, indicates the amount of the traded activity at specific price levels\n\n' +
+       ' - high traded zones - usually represents consolidation zones (value areas)\n' +
+       ' - low traded zones - usually represents supply & demand or liquidity zones'
 
 vpSH = input.bool(true, 'Volume Profile', group = vpGR, tooltip = vpTP)
 
@@ -81,7 +84,7 @@ vBGC = input.color(color.new(#2962ff, 89), '', inline = 'vBG', group = vpGR)
 vpBG = input.bool(false, 'Profile Range Background ', inline = 'pBG', group = vpGR)
 bgC = input.color(color.new(#2962ff, 95), '', inline = 'pBG', group = vpGR)
 
-// Inputs for Volume Weighted Colored Bars (moved length here since histogram removed)
+// Inputs for Volume Weighted Colored Bars
 cbGR = 'Volume Weighted Colored Bars'
 
 cbTT = 'Colors bars based on the bar\'s volume relative to volume moving average\n' +
@@ -93,6 +96,29 @@ upTH = input.float(1.618, '  Upper Threshold', minval = 1., step = .1, group
 dnTH = input.float(0.618, '  Lower Threshold', minval = .1, step = .1, group = cbGR, display = disp)
 vmaL = input.int(21, '  Volume MA Length', minval = 1, group = cbGR, display = disp)
 
+// Inputs for Signal Module
+sigGR = 'Signal Module'
+
+shSH = input.bool(true, 'Stop-Hunt', group = sigGR)
+shOV = input.float(2.0, ' Overshoot %', minval = 0, step = 0.1, group = sigGR, display = disp) / 100
+shVM = input.float(1.5, ' Volume Multiplier', minval = 0.1, step = 0.1, group = sigGR, display = disp)
+
+dpSH = input.bool(true, 'dPOC Shift', group = sigGR)
+dpN  = input.int(20,  ' Lookback Bars', minval = 2, group = sigGR, display = disp)
+dpVM = input.float(1.0, ' Volume Multiplier', minval = 0.1, step = 0.1, group = sigGR, display = disp)
+
+pbSH = input.bool(true, 'POC Breakout', group = sigGR)
+pbVM = input.float(1.2, ' Volume Multiplier', minval = 0.1, step = 0.1, group = sigGR, display = disp)
+
+csSH = input.bool(true, 'Composite Score', group = sigGR)
+csTH = input.int(2,   ' Min Conditions', minval = 1, maxval = 3, group = sigGR, display = disp)
+
+sigLS   = input.string('Normal', ' Label Size', options = ['Tiny', 'Small', 'Normal'], group = sigGR, display = disp)
+sigSize = switch sigLS
+    'Tiny'   => size.tiny
+    'Small'  => size.small
+    'Normal' => size.normal
+    => size.auto
 //-----------------------------------------------------------------------------}
 // User Defined Types
 //-----------------------------------------------------------------------------{
@@ -142,6 +168,25 @@ array<bar> ltfBD = array.new<bar>(1, bar.new())
 var float pHST = na
 var float pLST = na
 var string ltf = na
+
+// Persistent placeholders
+var int   field_0 = na
+var float field_1 = na
+var float field_2 = na
+var int   field_3 = na
+var int   field_4 = na
+var int   field_5 = na
+var int   field_6 = na
+var float field_12 = na
+var float field_13 = na
+var float field_14 = na
+var float field_15 = na
+var float field_17 = na
+
+// Hold latest VAH / VAL / POC levels for signal logic
+var float curVAH = na
+var float curVAL = na
+var float curPOC = na
 
 //-----------------------------------------------------------------------------}
 // Functions / Methods
@@ -205,10 +250,10 @@ alarm(_message) =>
 // Calculations Volume Profile
 //-----------------------------------------------------------------------------{
 
-nzV = nz(b.v)
+nzV  = nz(b.v)
 vSMA = ta.sma(nzV, vmaL)
 
-rpS = f_gTS(rpLS)
+rpS  = f_gTS(rpLS)
 ppLS := f_gTS(ppLS)
 
 tPOS = lcDB == 'Top Right' ? position.top_right : lcDB == 'Middle Right' ? position.middle_right : position.bottom_left
@@ -291,7 +336,7 @@ if barstate.islast and ltfBD.size() > 0
 
         bD.bn.push(ltfBD.size())
 
-    bI = vpLN
+    bI  = vpLN
     bSZ = 0
     aSZ = bD.bv.size()
 
@@ -324,23 +369,23 @@ if barstate.islast and ltfBD.size() > 0
 
         if pcSH == 'Developing POC'
             if aI == bD.bn.get(vpLN - bI)
-                field_0 = b.i
-                field_1 = b.h
-                field_2 = b.l
+                field_0 := b.i
+                field_1 := b.h
+                field_2 := b.l
                 VP.pPC.push(chart.point.from_index(field_0[bI], math.avg(field_1[bI], field_2[bI])))
-                field_3 = b.i
+                field_3 := b.i
                 VP.pPC.push(chart.point.from_index(field_3[bI] + 1, pLST + (vD.vt.indexof(vD.vt.max()) + .5) * pSTP))
                 bSZ := bSZ + bD.bn.get(vpLN - bI)
-                bI := bI - 1
+                bI  := bI - 1
                 bI
             else if aI == bSZ + bD.bn.get(vpLN - bI) and bSZ != 0
-                field_4 = b.i
+                field_4 := b.i
                 VP.pPC.push(chart.point.from_index(field_4[bI] + 1, pLST + (vD.vt.indexof(vD.vt.max()) + .5) * pSTP))
                 bSZ := bSZ + bD.bn.get(vpLN - bI)
-                bI := bI - 1
+                bI  := bI - 1
                 bI
             else if bI == 0
-                field_5 = b.i
+                field_5 := b.i
                 VP.pPC.push(chart.point.from_index(field_5[bI] + 1, pLST + (vD.vt.indexof(vD.vt.max()) + .5) * pSTP))
                 bSZ := bSZ + bD.bn.get(vpLN - bI)
                 bSZ
@@ -385,6 +430,11 @@ if barstate.islast and ltfBD.size() > 0
     vaL = pLST + (VP.lbP + .0) * pSTP
     pLN = vpLN > 360 ? 360 : vpLN
 
+    // save latest VAH/VAL/POC for signals
+    curVAH := vaH
+    curVAL := vaL
+    curPOC := poc
+
     if vahS
         f_drawLineX(VP.sI, vaH, vpRT ? (vpSH ? int(pLN * vpWD + vpHO) : spSH ? vpHO : 0) + last_bar_index : last_bar_index, vaH, xloc.bar_index, extend.none, vahC, line.style_solid, vahW)
 
@@ -414,19 +464,15 @@ if barstate.islast and ltfBD.size() > 0
     // ──────────────────────────────────────────────────────────────────────────
     //                           ***  NEW  TABLE  ***
     // ──────────────────────────────────────────────────────────────────────────
-    // ────────────────────────
-    // Calculate statistics for Net Strength and volume distribution
-    // ────────────────────────
-    totVol = vD.vt.sum()
-    buyVol = vD.vb.sum()
-    sellVol = totVol - buyVol
-    buyPct = totVol > 0 ? buyVol / totVol * 100 : 0
-    sellPct = totVol > 0 ? sellVol / totVol * 100 : 0
-    netStr = buyPct - sellPct  // positive → buyers stronger
-
     if vpST
         table change = table.new(tPOS, 2, 3, border_width = 3)
         tC = chart.fg_color
+        totVol = vD.vt.sum()
+        buyVol = vD.vb.sum()
+        sellVol = totVol - buyVol
+        buyPct = totVol > 0 ? buyVol / totVol * 100 : 0
+        sellPct = totVol > 0 ? sellVol / totVol * 100 : 0
+        netStr = buyPct - sellPct  // positive → buyers stronger
 
         // Buyers %
         table.cell(change, 0, 0, 'Buyers %', text_color = tC, bgcolor = color.new(tC, 80), text_halign = text.align_left, text_size = ppLS)
@@ -461,8 +507,100 @@ if barstate.islast and ltfBD.size() > 0
 
         if sdSH and vD.vt.get(i) / vD.vt.max() < sdTH
             sdC = pLST + (i + 0.50) * pSTP > pLST + (VP.pcL + .5) * pSTP ? sdSC : sdDC
-            field_6 = b.i
+            field_6 := b.i
             VP.vp.push(box.new(field_6[vpLN], pLST + (i + 1.) * pSTP, b.i, pLST + (i + .0) * pSTP, color(na), bgcolor = sdC))
+
+//-----------------------------------------------------------------------------}
+// SIGNAL MODULE  (Buy / Sell labels)
+//-----------------------------------------------------------------------------{
+
+// Stop-Hunt detection
+priceAboveVAH = not na(curVAH) and b.h > curVAH * (1 + shOV)
+priceBelowVAL = not na(curVAL) and b.l < curVAL * (1 - shOV)
+volSH         = nzV > vSMA * shVM
+shSignal      = shSH and volSH and (priceAboveVAH or priceBelowVAL)
+
+// Draw Stop-Hunt label
+if shSignal
+    label.new(
+      b.i,
+      priceAboveVAH ? b.h : b.l,
+      priceAboveVAH ? 'S' : 'B',
+      xloc.bar_index,
+      yloc.price,
+      priceAboveVAH ? color.new(spDC, 0) : color.new(spUC, 0),
+      priceAboveVAH ? label.style_label_down : label.style_label_up,
+      chart.fg_color,
+      sigSize)
+
+// dPOC Shift detection
+slopeNow  = not na(curPOC)       and not na(curPOC[dpN])       ? curPOC     - curPOC[dpN]       : na
+slopePrev = not na(curPOC[1])    and not na(curPOC[1 + dpN])   ? curPOC[1]  - curPOC[1 + dpN]  : na
+dpShiftRaw = dpSH and not na(slopeNow) and not na(slopePrev) and math.abs(slopeNow) > 0 and math.abs(slopePrev) > 0 and math.sign(slopeNow) != math.sign(slopePrev)
+volDP      = nzV > vSMA * dpVM
+dpSignal   = dpShiftRaw and volDP
+
+if dpSignal
+    label.new(
+      b.i,
+      b.c,
+      slopeNow > 0 ? 'B' : 'S',
+      xloc.bar_index,
+      yloc.price,
+      slopeNow > 0 ? color.new(spUC, 0) : color.new(spDC, 0),
+      slopeNow > 0 ? label.style_label_up : label.style_label_down,
+      chart.fg_color,
+      sigSize)
+
+// POC Breakout detection
+crossUp = not na(curPOC) and b.c > curPOC and (b[1]).c <= curPOC[1]
+crossDn = not na(curPOC) and b.c < curPOC and (b[1]).c >= curPOC[1]
+volPB   = nzV > vSMA * pbVM
+pbSignal = pbSH and volPB and (crossUp or crossDn)
+
+if pbSignal
+    label.new(
+      b.i,
+      b.c,
+      crossUp ? 'B' : 'S',
+      xloc.bar_index,
+      yloc.price,
+      crossUp ? color.new(spUC, 0) : color.new(spDC, 0),
+      crossUp ? label.style_label_up : label.style_label_down,
+      chart.fg_color,
+      sigSize)
+
+// Composite Score
+if csSH
+    bullCnt = 0
+    bearCnt = 0
+    // Stop-Hunt direction
+    if shSignal
+        bullCnt += priceBelowVAL ? 1 : 0
+        bearCnt += priceAboveVAH ? 1 : 0
+    // dPOC Shift direction
+    if dpSignal
+        bullCnt += slopeNow > 0 ? 1 : 0
+        bearCnt += slopeNow < 0 ? 1 : 0
+    // POC Breakout direction
+    if pbSignal
+        bullCnt += crossUp ? 1 : 0
+        bearCnt += crossDn ? 1 : 0
+
+    scoreTot = bullCnt + bearCnt
+    csSignal = scoreTot >= csTH
+
+    if csSignal
+        label.new(
+          b.i,
+          b.c,
+          bullCnt >= bearCnt ? 'B' : 'S',
+          xloc.bar_index,
+          yloc.price,
+          bullCnt >= bearCnt ? color.new(spUC, 0) : color.new(spDC, 0),
+          bullCnt >= bearCnt ? label.style_label_up : label.style_label_down,
+          chart.fg_color,
+          sigSize)
 
 //-----------------------------------------------------------------------------}
 // Calculations Volume Weighted Colored Bars
@@ -474,19 +612,19 @@ barcolor(vwcb and not na(nzV) ? nzV > vSMA * upTH ? (b.o < b.c ? #006400 : #9100
 // Alerts
 //-----------------------------------------------------------------------------{
 
-field_12 = b.c
+field_12 := b.c
 if f_crossingLevelX(field_12[1], pLST + (VP.pcL + .50) * pSTP) and pcSH != 'None'
-    field_13 = b.c
+    field_13 := b.c
     alarm('price action ' + (field_13[1] > pLST + (VP.pcL + .50) * pSTP ? 'crossed above ' : 'crossed below ') + 'the point of control line')
 
-field_14 = b.c
+field_14 := b.c
 if f_crossingLevelX(field_14[1], pLST + (VP.laP + 1.00) * pSTP) and vahS
-    field_15 = b.c
+    field_15 := b.c
     alarm('price action ' + (field_15[1] > pLST + (VP.laP + 1.00) * pSTP ? 'crossed above ' : 'crossed below ') + 'the value area high line')
 
 field_16 = b.c
 if f_crossingLevelX(field_16[1], pLST + (VP.lbP + 0.00) * pSTP) and vlSH
-    field_17 = b.c
+    field_17 := b.c
     alarm('price action ' + (field_17[1] > pLST + (VP.lbP + 0.00) * pSTP ? 'crossed above ' : 'crossed below ') + 'the value area low line')
 
 if nzV > vSMA * upTH and vwcb
@@ -495,28 +633,10 @@ if nzV > vSMA * upTH and vwcb
 if nzV > vSMA * 4.669 and vwcb
     alarm('watch out volume spike detected, may be a sign of exhaustion')
 
-// -----------------------------------------------------------------------------
-// Buy/Sell signals
-// -----------------------------------------------------------------------------
-buySignal  = close > vaL or netStr > 10
-sellSignal = close < vaH or netStr < -10
-
-if barstate.isconfirmed
-    if buySignal or sellSignal
-        label.new(
-          bar_index,
-          buySignal ? low - syminfo.mintick * 5 : high + syminfo.mintick * 5,
-          text = buySignal ? 'B' : 'S',
-          style = buySignal ? label.style_label_up : label.style_label_down,
-          color = buySignal ? color.green : color.red,
-          textcolor = color.white,
-          size = size.small
-        )
-
 //-----------------------------------------------------------------------------{
 
 var table logo = table.new(position.bottom_right, 1, 1)
 if barstate.islast
-    table.cell(logo, 0, 0, '☼☾  ', text_size = size.normal, text_color = color.teal)
+    table.cell(logo, 0, 0, '🍀', text_size = size.normal, text_color = color.teal)
 
 //-----------------------------------------------------------------------------}
