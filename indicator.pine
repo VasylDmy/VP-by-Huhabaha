@@ -501,15 +501,15 @@ if barstate.islast and ltfBD.size() > 0
         minDist := distVAH
         targetName := 'VAH'
         targetPct := pctVAH
-    if not na(distVAL) and (na(minDist) or distVAL < minDist or (distVAL == minDist and not (targetName in ['POC', 'VAH'])))
+    if not na(distVAL) and (na(minDist) or distVAL < minDist or (distVAL == minDist and targetName != 'POC' and targetName != 'VAH'))
         minDist := distVAL
         targetName := 'VAL'
         targetPct := pctVAL
-    if not na(distDem) and (na(minDist) or distDem < minDist or (distDem == minDist and not (targetName in ['POC', 'VAH', 'VAL'])))
+    if not na(distDem) and (na(minDist) or distDem < minDist or (distDem == minDist and targetName != 'POC' and targetName != 'VAH' and targetName != 'VAL'))
         minDist := distDem
         targetName := 'Demand'
         targetPct := pctDem
-    if not na(distSup) and (na(minDist) or distSup < minDist or (distSup == minDist and not (targetName in ['POC', 'VAH', 'VAL', 'Demand'])))
+    if not na(distSup) and (na(minDist) or distSup < minDist or (distSup == minDist and targetName != 'POC' and targetName != 'VAH' and targetName != 'VAL' and targetName != 'Demand'))
         minDist := distSup
         targetName := 'Supply'
         targetPct := pctSup
